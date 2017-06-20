@@ -20,12 +20,6 @@ tmr.create():alarm(700, tmr.ALARM_AUTO, function(t)
 	end
 end)
 
---wifi.setmode(wifi.STATION)
---wifi.sta.config('JasonJoanne', '34C3036A')
---tmr.create():alarm(10000, tmr.ALARM_SINGLE, function(t)
---    wifi.sta.connect()
---end)    
-
 
 
 
