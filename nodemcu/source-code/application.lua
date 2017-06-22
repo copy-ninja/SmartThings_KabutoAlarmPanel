@@ -20,7 +20,7 @@ if smartthings.token then
 		if sensorSend[1] then
 			t:stop()
 			local sensor = sensors[sensorSend[1]]
-			http.put(smartthings.apiUrl.."\/sensors\/"..sensor.pin.."\/"..gpio.read(sensor.pin), "Authorization: Bearer "..smartthings.token.."\r\n", "", function() 
+			http.put(smartthings.apiUrl.."\/device\/"..sensor.pin.."\/"..gpio.read(sensor.pin), "Authorization: Bearer "..smartthings.token.."\r\n", "", function() 
 				table.remove(sensorSend, 1)
 				t:start()
 			end)

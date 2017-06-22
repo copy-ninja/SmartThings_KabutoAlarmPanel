@@ -27,3 +27,13 @@ httpd_set("/SyncSettings", function(request, response)
 	response:status("204")
     response:send("")
 end)
+httpd_set("/device", function(request, response) 
+    if request.method == "PUT" and request.contentType == "application/json" then
+		request.body = cjson.decode(request.body)
+		gpio.mode(request.body.pin, gpio.OUTPUT)
+		gpio.write(request.body.pin, request.body.state)
+    end            
+    response:contentType("application/json")
+	response:status("204")
+    response:send("")
+end)

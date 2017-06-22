@@ -5,9 +5,9 @@ local ssdp_deviceXML = "<?xml version=\"1.0\"?>\r\n"..
 				"\t<device>\r\n"..
 				"\t\t<deviceType>"..device.discovery.deviceType.."</deviceType>\r\n"..
 				"\t\t<friendlyName>"..device.name.."</friendlyName>\r\n"..
-				"\t\t<manufacturer>copyninja</manufacturer>\r\n"..
-				"\t\t<manufacturerURL>http://copyninja.net/</manufacturerURL>\r\n"..
-				"\t\t<modelDescription>Alarm Panel NodeMCU</modelDescription>\r\n"..
+				"\t\t<manufacturer>con-nec-ted</manufacturer>\r\n"..
+				"\t\t<manufacturerURL>http://con-nec-ted.com/</manufacturerURL>\r\n"..
+				"\t\t<modelDescription>Alarm Panel</modelDescription>\r\n"..
 				"\t\t<modelName>"..device.name.."</modelName>\r\n\t\t<modelNumber>"..device.version.."</modelNumber>\r\n"..
 				"\t\t<serialNumber>"..node.chipid().."</serialNumber>\r\n"..
 				"\t\t<UDN>"..device.discovery.deviceID.."</UDN>\r\n"..
