@@ -103,7 +103,10 @@ local httpServer_handler = {{
                 r.path = p
                 r.contentType = string.match(r.source, "Content%-Type: ([%w/-]+)")
                 r.body = r.source:sub(r.source:find("\r\n\r\n", 1, true), #r.source)
-				r.source = nil                
+				r.source = nil      
+				if r.contentType == "application/json" then 
+					r.body = cjson.decode(r.body)
+				end
                 return true
              end
     }, {

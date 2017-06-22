@@ -25,7 +25,7 @@ definition(
     singleInstance: true
 )
 mappings {
-	path("/device/:id/:deviceState")	{ action: [ PUT: "deviceAlarmPanelUpdateState"] }
+	path("/device/:mac/:id/:deviceState")	{ action: [ PUT: "childDeviceStateUpdate"] }
 }
 preferences {
 	page(name: "pageDiscovery",     install: false, uninstall: true, content: "pageDiscovery", 		nextPage: "pageConfiguration" )
@@ -34,9 +34,9 @@ preferences {
 def pageDiscovery() {
 	if(!state.accessToken) { createAccessToken() }	
 	dynamicPage(name: "pageDiscovery", nextPage: "pageConfiguration", refreshInterval: 3) {
-		discoverAlarmPanelSubscribtion()
-		discoverAlarmPanel()
-		discoverAlarmPanelVerification()
+		discoverySubscribtion()
+		discoverySearch()
+		discoveryVerification()
 		def alarmPanels = pageDiscoveryGetAlarmPanels()
 		section("Please wait while we discover your Kabuto Alarm Panel") {
 			input(name: "selectedAlarmPanels", type: "enum", title: "Select Alarm Panel (${alarmPanels.size() ?: 0} found)", required: true, multiple: true, options: alarmPanels)
@@ -45,18 +45,15 @@ def pageDiscovery() {
 }
 def pageConfiguration() {
 	def selecteAlarmPanels = [] + getSelectedAlarmPanel()
-	
 	dynamicPage(name: "pageConfiguration", nextPage: "pageDiscovery" ) {
 		selecteAlarmPanels.each { alarmPanel ->
 			section(hideable: true, "AlarmPanel_${alarmPanel.mac[-6..-1]}") {
-				input(name: "deviceType_${alarmPanel.mac}_0", type: "enum", title:"Pin 0 Device Type", required: false, multiple: false, options: pageConfigurationGetDeviceType())
 				input(name: "deviceType_${alarmPanel.mac}_1", type: "enum", title:"Pin 1 Device Type", required: false, multiple: false, options: pageConfigurationGetDeviceType())
 				input(name: "deviceType_${alarmPanel.mac}_2", type: "enum", title:"Pin 2 Device Type", required: false, multiple: false, options: pageConfigurationGetDeviceType())
 				input(name: "deviceType_${alarmPanel.mac}_5", type: "enum", title:"Pin 5 Device Type", required: false, multiple: false, options: pageConfigurationGetDeviceType())
 				input(name: "deviceType_${alarmPanel.mac}_6", type: "enum", title:"Pin 6 Device Type", required: false, multiple: false, options: pageConfigurationGetDeviceType())
 				input(name: "deviceType_${alarmPanel.mac}_7", type: "enum", title:"Pin 7 Device Type", required: false, multiple: false, options: pageConfigurationGetDeviceType())
 			}
-			log.debug settings
 		}
 	}
 }
@@ -74,18 +71,18 @@ Map pageDiscoveryGetAlarmPanels() {
 }
 def installed() { 
 	initialize() 
-	runEvery3Hours(discoverAlarmPanel)
+	runEvery3Hours(discoverySearch)
 }
 def updated() { initialize() }
 def initialize() {
 	unsubscribe()
 	unschedule()
-	discoverAlarmPanelSubscribtion(true)	
-	deviceAlarmPanelConfiguration()
-    systemAlarmPanelSyncSettings()
+	discoverySubscribtion(true)	
+	childDeviceConfiguration()
+    deviceUpdateSettings()
 }
 
-def getSelectedAlarmPanel() {
+def getSelectedAlarmPanel(mac) {
 	if (!state.alarmPanel) { 
 		state.alarmPanel = []
 		def selecteAlarmPanels = [] + settings.selectedAlarmPanels
@@ -100,7 +97,11 @@ def getSelectedAlarmPanel() {
 			]
 		}
 	} 
-	return state.alarmPanel
+	if (mac) {
+		return state.alarmPanel.find { it.mac == mac } 
+	} else {
+		return state.alarmPanel
+	}
 }
 def getAlarmPanels() {
 	if (!state.devices) { state.devices = [:] }
@@ -108,19 +109,19 @@ def getAlarmPanels() {
 }
 
 //Device discovery through SSDP
-def discoverAlarmPanelDeviceType() { return "urn:schemas-copyninja-net:device:AlarmPanel:1" }
-def discoverAlarmPanel() { sendHubCommand(new physicalgraph.device.HubAction("lan discovery ${discoverAlarmPanelDeviceType()}", physicalgraph.device.Protocol.LAN)) }
-def discoverAlarmPanelSubscribtion(force=false) {
+def discoveryDeviceType() { return "urn:schemas-copyninja-net:device:AlarmPanel:1" }
+def discoverySearch() { sendHubCommand(new physicalgraph.device.HubAction("lan discovery ${discoveryDeviceType()}", physicalgraph.device.Protocol.LAN)) }
+def discoverySubscribtion(force=false) {
 	if (force) {
 		unsubscribe()
 		state.subscribe = false
 	}
 	if(!state.subscribe) {
-		subscribe(location, "ssdpTerm.${discoverAlarmPanelDeviceType()}", discoverAlarmPanelHandler, [filterEvents:false])
+		subscribe(location, "ssdpTerm.${discoveryDeviceType()}", discoverySearchHandler, [filterEvents:false])
 		state.subscribe = true
 	}
 }
-def discoverAlarmPanelHandler(evt) {
+def discoverySearchHandler(evt) {
 	def event = parseLanMessage(evt.description)
 	event << ["hub":evt?.hubId]
 	def devices = getAlarmPanels()
@@ -138,34 +139,22 @@ def discoverAlarmPanelHandler(evt) {
 		}
 	}
 }
-def discoverAlarmPanelVerification() {
+def discoveryVerification() {
 	def alarmPanels = getAlarmPanels().findAll { it?.value?.verified != true }
 	alarmPanels.each {
 		String host = "${convertHexToIP(it.value.networkAddress)}:${convertHexToInt(it.value.deviceAddress)}"
-		sendHubCommand(new physicalgraph.device.HubAction("""GET ${it.value.ssdpPath} HTTP/1.1\r\nHOST: ${host}\r\n\r\n""", physicalgraph.device.Protocol.LAN, host, [callback: discoverAlarmPanelVerificationHandler]))
+		sendHubCommand(new physicalgraph.device.HubAction("""GET ${it.value.ssdpPath} HTTP/1.1\r\nHOST: ${host}\r\n\r\n""", physicalgraph.device.Protocol.LAN, host, [callback: discoveryVerificationHandler]))
 	}
 }
-def discoverAlarmPanelVerificationHandler(physicalgraph.device.HubResponse hubResponse) {
+def discoveryVerificationHandler(physicalgraph.device.HubResponse hubResponse) {
 	def body = hubResponse.xml
 	def devices = getAlarmPanels()
 	def device = devices.find { it?.key?.contains(body?.device?.UDN?.text()) }
 	if (device) { device.value << [name: body?.device?.roomName?.text(), model:body?.device?.modelName?.text(), serialNumber:body?.device?.serialNum?.text(), verified: true] }
 }
-def systemAlarmPanelSyncSettings() {
-	if(!state.accessToken) { createAccessToken() }	
-	def body = [
-		token : state.accessToken,
-		apiUrl : apiServerUrl + "/api/smartapps/installations/" + app.id,
-		sensors : []
-	]
-	getAllChildDevices().each {  if (it.name != "Kabuto Siren/Strobe") { body.sensors = body.sensors + [ pin : it.deviceNetworkId.split("\\|")[1] ] } }
-	def selectedAlarmPanel = [] + getSelectedAlarmPanel()
-	selectedAlarmPanel.each {
-		sendHubCommand(new physicalgraph.device.HubAction([method: "POST", path: "/SyncSettings", headers: [ HOST: it.host, "Content-Type": "application/json" ], body : groovy.json.JsonOutput.toJson(body)], it.host))
-	}
-}
 
-def deviceAlarmPanelConfiguration() {
+
+def childDeviceConfiguration() {
 	def selecteAlarmPanels = [] + getSelectedAlarmPanel()
 	settings.each { name , value ->
 		def nameValue = name.split("\\_")
@@ -194,15 +183,27 @@ def deviceAlarmPanelConfiguration() {
 		}
 	}
 }
-def deviceAlarmPanelUpdateState() {
-	def deviceDNI = [ state.alarmPanel?.mac, params.id].join('|')
-	def device = getChildDevice(deviceDNI)
+def childDeviceStateUpdate() {
+	def device = getChildDevice(params.mac.toUpperCase() + "|" + params.id)
 	if (device) device.setStatus(params.deviceState)
 }
 
-def deviceAlarmPanelSyncState(deviceId, deviceState) {
+def deviceUpdateSettings() {
+	if(!state.accessToken) { createAccessToken() }	
+	def body = [
+		token : state.accessToken,
+		apiUrl : apiServerUrl + "/api/smartapps/installations/" + app.id,
+		sensors : []
+	]
+	getAllChildDevices().each {  if (it.name != "Kabuto Siren/Strobe") { body.sensors = body.sensors + [ pin : it.deviceNetworkId.split("\\|")[1] ] } }
+	def selectedAlarmPanel = [] + getSelectedAlarmPanel()
+	selectedAlarmPanel.each { sendHubCommand(new physicalgraph.device.HubAction([method: "PUT", path: "/settings", headers: [ HOST: it.host, "Content-Type": "application/json" ], body : groovy.json.JsonOutput.toJson(body)], it.host)) }
+}
+def deviceUpdateDeviceState(deviceDNI, deviceState) {
+	def deviceId = deviceDNI.split("\\|")[1]
+	def deviceMac = deviceDNI.split("\\|")[0]
 	def body = [ pin : deviceId, state : deviceState ]
-	def selectedAlarmPanel = getSelectedAlarmPanel()
+	def selectedAlarmPanel = getSelectedAlarmPanel(deviceMac)
 	sendHubCommand(new physicalgraph.device.HubAction([method: "PUT", path: "/device", headers: [ HOST: selectedAlarmPanel.host, "Content-Type": "application/json" ], body : groovy.json.JsonOutput.toJson(body)], selectedAlarmPanel.host))
 }
 

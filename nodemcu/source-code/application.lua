@@ -1,12 +1,10 @@
 local sensorSend = { }
 
-for i, sensor in pairs(sensors) do
+for i,sensor in pairs(sensors) do
 	gpio.mode(sensor.pin, gpio.INPUT, gpio.PULLUP)
-	sensor.state = gpio.read(sensor.pin)
-	table.insert(sensorSend, i)
 end
 
-tmr.create():alarm(100, tmr.ALARM_AUTO,function(t)
+tmr.create():alarm(200, tmr.ALARM_AUTO,function(t)
 	for i, sensor in pairs(sensors) do
 		if sensor.state ~= gpio.read(sensor.pin) then
 			sensor.state = gpio.read(sensor.pin)
@@ -15,15 +13,13 @@ tmr.create():alarm(100, tmr.ALARM_AUTO,function(t)
 	end
 end)
 
-if smartthings.token then
-	tmr.create():alarm(250, tmr.ALARM_AUTO, function(t)
-		if sensorSend[1] then
-			t:stop()
-			local sensor = sensors[sensorSend[1]]
-			http.put(smartthings.apiUrl.."\/device\/"..sensor.pin.."\/"..gpio.read(sensor.pin), "Authorization: Bearer "..smartthings.token.."\r\n", "", function() 
-				table.remove(sensorSend, 1)
-				t:start()
-			end)
-		end
-	end)
-end
+tmr.create():alarm(200, tmr.ALARM_AUTO, function(t)
+	if sensorSend[1] then
+		t:stop()
+		local sensor = sensors[sensorSend[1]]
+		http.put(smartthings.apiUrl.."\/device\/"..wifi.sta.getmac():gsub("%:", "").."\/"..sensor.pin.."\/"..gpio.read(sensor.pin), "Authorization: Bearer "..smartthings.token.."\r\n", "", function(stat, b, h) 
+			table.remove(sensorSend, 1)
+			t:start()
+		end)
+	end
+end)
